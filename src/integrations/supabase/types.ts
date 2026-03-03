@@ -14,66 +14,7 @@ export type Database = {
   }
   public: {
     Tables: {
-      profiles: {
-        Row: {
-          avatar_url: string | null
-          created_at: string
-          display_name: string | null
-          id: string
-          updated_at: string
-        }
-        Insert: {
-          avatar_url?: string | null
-          created_at?: string
-          display_name?: string | null
-          id: string
-          updated_at?: string
-        }
-        Update: {
-          avatar_url?: string | null
-          created_at?: string
-          display_name?: string | null
-          id?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
-      todos: {
-        Row: {
-          completed: boolean
-          created_at: string
-          date: string
-          description: string | null
-          id: string
-          order: number
-          priority: Database["public"]["Enums"]["todo_priority"]
-          title: string
-          user_id: string
-        }
-        Insert: {
-          completed?: boolean
-          created_at?: string
-          date?: string
-          description?: string | null
-          id?: string
-          order?: number
-          priority?: Database["public"]["Enums"]["todo_priority"]
-          title: string
-          user_id: string
-        }
-        Update: {
-          completed?: boolean
-          created_at?: string
-          date?: string
-          description?: string | null
-          id?: string
-          order?: number
-          priority?: Database["public"]["Enums"]["todo_priority"]
-          title?: string
-          user_id?: string
-        }
-        Relationships: []
-      }
+      [_ in never]: never
     }
     Views: {
       [_ in never]: never
@@ -82,7 +23,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      todo_priority: "high" | "medium" | "low"
+      [_ in never]: never
     }
     CompositeTypes: {
       [_ in never]: never
@@ -209,8 +150,6 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {
-      todo_priority: ["high", "medium", "low"],
-    },
+    Enums: {},
   },
 } as const
