@@ -1,16 +1,15 @@
-import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useCallback, useEffect, ReactNode } from 'react';
 import { Task, Priority, ViewMode } from '@/types/task';
 import { format, startOfWeek, addDays } from 'date-fns';
-
-function generateId() {
-  return Math.random().toString(36).substring(2, 9);
-}
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/hooks/useAuth';
+import { toast } from 'sonner';
 
 function getToday() {
   return format(new Date(), 'yyyy-MM-dd');
 }
 
-function getWeekDates(date: Date): string[] {
+function getWeekDatesFromDate(date: Date): string[] {
   const start = startOfWeek(date, { weekStartsOn: 1 });
   return Array.from({ length: 5 }, (_, i) => format(addDays(start, i), 'yyyy-MM-dd'));
 }
@@ -19,6 +18,7 @@ interface TaskStore {
   tasks: Task[];
   viewMode: ViewMode;
   selectedDate: string;
+  loading: boolean;
   setViewMode: (mode: ViewMode) => void;
   setSelectedDate: (date: string) => void;
   addTask: (title: string, priority: Priority, date: string, description?: string) => void;
@@ -33,43 +33,98 @@ interface TaskStore {
 
 const TaskContext = createContext<TaskStore | null>(null);
 
-const INITIAL_TASKS: Task[] = [
-  { id: generateId(), title: '주간 보고서 작성', priority: 'high', completed: false, date: getToday(), order: 0 },
-  { id: generateId(), title: '팀 미팅 자료 준비', priority: 'medium', completed: false, date: getToday(), order: 1 },
-  { id: generateId(), title: '이메일 정리', priority: 'low', completed: false, date: getToday(), order: 2 },
-];
-
 export function TaskProvider({ children }: { children: ReactNode }) {
-  const [tasks, setTasks] = useState<Task[]>(INITIAL_TASKS);
+  const { user } = useAuth();
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [viewMode, setViewMode] = useState<ViewMode>('daily');
   const [selectedDate, setSelectedDate] = useState(getToday());
+  const [loading, setLoading] = useState(true);
 
-  const addTask = useCallback((title: string, priority: Priority, date: string, description?: string) => {
+  // Fetch tasks from Supabase
+  useEffect(() => {
+    if (!user) return;
+    setLoading(true);
+    supabase
+      .from('tasks')
+      .select('*')
+      .eq('user_id', user.id)
+      .then(({ data, error }) => {
+        if (error) {
+          toast.error('일정을 불러오는데 실패했습니다');
+          console.error(error);
+        } else {
+          setTasks((data || []).map(t => ({
+            id: t.id,
+            title: t.title,
+            description: t.description ?? undefined,
+            priority: t.priority as Priority,
+            completed: t.completed,
+            date: t.date,
+            order: t.order,
+          })));
+        }
+        setLoading(false);
+      });
+  }, [user]);
+
+  const addTask = useCallback(async (title: string, priority: Priority, date: string, description?: string) => {
+    if (!user) return;
     const maxOrder = tasks.filter(t => t.date === date).reduce((max, t) => Math.max(max, t.order), -1);
-    setTasks(prev => [...prev, {
-      id: generateId(),
-      title,
-      description,
-      priority,
-      completed: false,
-      date,
-      order: maxOrder + 1,
-    }]);
-  }, [tasks]);
+    const newOrder = maxOrder + 1;
 
-  const updateTask = useCallback((id: string, updates: Partial<Omit<Task, 'id'>>) => {
+    const { data, error } = await supabase
+      .from('tasks')
+      .insert({ title, description, priority, date, order: newOrder, user_id: user.id })
+      .select()
+      .single();
+
+    if (error) {
+      toast.error('일정 추가에 실패했습니다');
+      console.error(error);
+      return;
+    }
+
+    setTasks(prev => [...prev, {
+      id: data.id,
+      title: data.title,
+      description: data.description ?? undefined,
+      priority: data.priority as Priority,
+      completed: data.completed,
+      date: data.date,
+      order: data.order,
+    }]);
+  }, [user, tasks]);
+
+  const updateTask = useCallback(async (id: string, updates: Partial<Omit<Task, 'id'>>) => {
+    const { error } = await supabase.from('tasks').update(updates).eq('id', id);
+    if (error) {
+      toast.error('수정에 실패했습니다');
+      return;
+    }
     setTasks(prev => prev.map(t => t.id === id ? { ...t, ...updates } : t));
   }, []);
 
-  const deleteTask = useCallback((id: string) => {
+  const deleteTask = useCallback(async (id: string) => {
+    const { error } = await supabase.from('tasks').delete().eq('id', id);
+    if (error) {
+      toast.error('삭제에 실패했습니다');
+      return;
+    }
     setTasks(prev => prev.filter(t => t.id !== id));
   }, []);
 
-  const toggleComplete = useCallback((id: string) => {
+  const toggleComplete = useCallback(async (id: string) => {
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
+    const { error } = await supabase.from('tasks').update({ completed: !task.completed }).eq('id', id);
+    if (error) {
+      toast.error('상태 변경에 실패했습니다');
+      return;
+    }
     setTasks(prev => prev.map(t => t.id === id ? { ...t, completed: !t.completed } : t));
-  }, []);
+  }, [tasks]);
 
-  const reorderTasks = useCallback((taskId: string, targetId: string) => {
+  const reorderTasks = useCallback(async (taskId: string, targetId: string) => {
     setTasks(prev => {
       const newTasks = [...prev];
       const dragIdx = newTasks.findIndex(t => t.id === taskId);
@@ -77,10 +132,17 @@ export function TaskProvider({ children }: { children: ReactNode }) {
       if (dragIdx === -1 || dropIdx === -1) return prev;
       const [moved] = newTasks.splice(dragIdx, 1);
       newTasks.splice(dropIdx, 0, moved);
-      // Reassign order for same-date tasks
       const date = moved.date;
       let order = 0;
-      return newTasks.map(t => t.date === date ? { ...t, order: order++ } : t);
+      const updated = newTasks.map(t => t.date === date ? { ...t, order: order++ } : t);
+
+      // Update orders in DB (fire and forget)
+      const dateTasks = updated.filter(t => t.date === date);
+      dateTasks.forEach(t => {
+        supabase.from('tasks').update({ order: t.order }).eq('id', t.id).then();
+      });
+
+      return updated;
     });
   }, []);
 
@@ -89,7 +151,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
   }, [tasks]);
 
   const getWeekDatesArr = useCallback(() => {
-    return getWeekDates(new Date(selectedDate));
+    return getWeekDatesFromDate(new Date(selectedDate));
   }, [selectedDate]);
 
   const getAllActiveTasks = useCallback(() => {
@@ -101,7 +163,7 @@ export function TaskProvider({ children }: { children: ReactNode }) {
 
   return (
     <TaskContext.Provider value={{
-      tasks, viewMode, selectedDate, setViewMode, setSelectedDate,
+      tasks, viewMode, selectedDate, loading, setViewMode, setSelectedDate,
       addTask, updateTask, deleteTask, toggleComplete, reorderTasks,
       getTasksForDate, getWeekDates: getWeekDatesArr, getAllActiveTasks,
     }}>

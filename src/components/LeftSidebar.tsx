@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { CalendarDays, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarDays, Calendar, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
 import { useTaskStore } from '@/hooks/useTaskStore';
+import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 
 export function LeftSidebar() {
   const { viewMode, setViewMode } = useTaskStore();
+  const { signOut, user } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
 
   const navItems = [
@@ -48,8 +50,17 @@ export function LeftSidebar() {
       </nav>
 
       {!collapsed && (
-        <div className="p-3 border-t border-border">
-          <p className="text-[10px] font-mono text-muted-foreground tracking-wider uppercase">Work Todo</p>
+        <div className="p-3 border-t border-border space-y-2">
+          {user && (
+            <p className="text-[10px] font-mono text-muted-foreground truncate">{user.email}</p>
+          )}
+          <button
+            onClick={signOut}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded text-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span className="font-mono text-xs">로그아웃</span>
+          </button>
         </div>
       )}
     </div>
