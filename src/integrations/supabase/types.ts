@@ -14,6 +14,30 @@ export type Database = {
   }
   public: {
     Tables: {
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          display_name: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          display_name?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       tasks: {
         Row: {
           completed: boolean
@@ -24,6 +48,7 @@ export type Database = {
           order: number
           priority: string
           title: string
+          type: string
           updated_at: string
           user_id: string
         }
@@ -36,6 +61,7 @@ export type Database = {
           order?: number
           priority?: string
           title: string
+          type?: string
           updated_at?: string
           user_id: string
         }
@@ -48,6 +74,7 @@ export type Database = {
           order?: number
           priority?: string
           title?: string
+          type?: string
           updated_at?: string
           user_id?: string
         }
